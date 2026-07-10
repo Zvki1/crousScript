@@ -1,0 +1,49 @@
+name: Moniteur CROUS
+
+# Hébergement actuel du moniteur (un futur passage sur VPS rendrait le cron inutile).
+# Requiert les secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (voir README).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"  # toutes les ~5 min (GitHub peut retarder de 5-15 min)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: moniteur
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Cycle de vérification
+        run: python main.py --once
+        env:
+          CITY: ${{ vars.CITY || 'Lyon' }}
+          MARGIN_KM: ${{ vars.MARGIN_KM || '5' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          DB_PATH: etat.db
+
+      - name: Sauvegarder l'état (annonces vues)
+        if: always()
+        run: |
+          git config user.name "moniteur-crous"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f etat.db
+          git diff --cached --quiet || {
+            git commit -m "état : cycle du $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push
+          }

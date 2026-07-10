@@ -1,0 +1,8 @@
+# Secrets locaux
+.env
+
+# État du moniteur (committé uniquement par le workflow GitHub Actions, via git add -f)
+etat.db
+
+__pycache__/
+*.pyc
