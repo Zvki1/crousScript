@@ -36,3 +36,7 @@ Le moyen par lequel l'utilisateur d'une surveillance reçoit ses alertes.
 **Cycle de vérification** :
 Une interrogation du CROUS pour une zone de surveillance, suivie de la comparaison avec les annonces vues et de l'émission des alertes.
 _Éviter_ : scan, check, polling
+
+**Outil de recherche** :
+Une campagne de logement CROUS (ex. « Fil de l'Eau », « Phase complémentaire »), identifiée par un `idTool` côté API. Plusieurs outils sont actifs en parallèle et s'ouvrent/expirent au fil de l'année ; le moniteur interroge tous ceux actifs au moment du cycle (voir docs/adr/0003).
+_Éviter_ : tool, campagne (réservé au vocabulaire CROUS, pas au nôtre)

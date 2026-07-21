@@ -79,4 +79,4 @@ Limite honnête : GitHub peut retarder les crons de 5 à 15 minutes aux heures c
 | `JITTER` | `10` | Décalage aléatoire max ajouté à l'intervalle |
 | `FAILURES_BEFORE_ALERT` | `5` | Échecs consécutifs avant l'alerte de panne |
 | `DB_PATH` | `etat.db` | Fichier SQLite des annonces vues |
-| `TOOL_ID` | `41` | Outil de recherche CROUS (change rarement) |
+| `TOOL_IDS` | — | Épingle des campagnes CROUS précises (ex. `42,47`) ; par défaut, découverte automatique des campagnes actives à chaque cycle |

@@ -28,7 +28,7 @@ class Config:
     echecs_avant_alerte: int
     healthcheck_url: str | None
     db_path: str
-    tool_id: int
+    tool_ids: list | None  # None = découverte automatique à chaque cycle (cf. crous.outils_actifs)
 
 
 def _charger_dotenv(chemin: str = ".env") -> None:
@@ -68,5 +68,12 @@ def charger_config() -> Config:
         echecs_avant_alerte=int(os.environ.get("FAILURES_BEFORE_ALERT", 5)),
         healthcheck_url=os.environ.get("HEALTHCHECK_URL") or None,
         db_path=os.environ.get("DB_PATH", "etat.db"),
-        tool_id=int(os.environ.get("TOOL_ID", 41)),
+        tool_ids=_parser_tool_ids(os.environ.get("TOOL_IDS")),
     )
+
+
+def _parser_tool_ids(brut: str | None) -> list | None:
+    """TOOL_IDS="42,47" force des outils précis ; absent/vide = découverte automatique."""
+    if not brut:
+        return None
+    return [int(x.strip()) for x in brut.split(",") if x.strip()]

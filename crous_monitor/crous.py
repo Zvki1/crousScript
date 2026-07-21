@@ -1,7 +1,8 @@
-"""Client de l'API JSON de trouverunlogement.lescrous.fr (voir docs/adr/0001)."""
+"""Client de l'API JSON de trouverunlogement.lescrous.fr (voir docs/adr/0001, docs/adr/0003)."""
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import requests
 
@@ -9,6 +10,29 @@ from .geocode import Zone
 
 BASE = "https://trouverunlogement.lescrous.fr"
 USER_AGENT = "crous-monitor/1.0 (moniteur personnel de disponibilite)"
+
+
+def outils_actifs() -> list[int]:
+    """Liste les outils de recherche actuellement actifs (cf. docs/adr/0003).
+
+    Le CROUS fait tourner plusieurs campagnes en parallèle (ex. "Fil de l'Eau",
+    "Phase complémentaire"), chacune sous un idTool distinct, et ces campagnes
+    s'ouvrent/expirent au fil de l'année. Un idTool codé en dur finit toujours
+    par pointer vers une campagne terminée — silencieusement, car l'API répond
+    200 avec une liste vide plutôt qu'une erreur pour un idTool expiré.
+    """
+    reponse = requests.get(f"{BASE}/api/fr/tools", headers={"User-Agent": USER_AGENT}, timeout=10)
+    reponse.raise_for_status()
+    maintenant = datetime.now(timezone.utc)
+    actifs = []
+    for outil in reponse.json():
+        if not outil.get("enabled"):
+            continue
+        fin = outil.get("endDate")
+        if fin and datetime.fromisoformat(fin) < maintenant:
+            continue
+        actifs.append(int(outil["id"]))
+    return actifs
 
 
 @dataclass(frozen=True)
@@ -41,23 +65,32 @@ def _premier_champ(item: dict, *chemins, defaut: str = "?") -> str:
     return defaut
 
 
+_LABELS_OCCUPATION = {"alone": "Seul(e)", "couple": "Couple", "house_sharing": "Colocation"}
+
+
 def _prix(item: dict) -> str:
-    """Le site exprime les loyers en centimes ; on tente plusieurs champs candidats."""
-    for chemin in ("occupationModes", ):
-        modes = item.get(chemin)
-        if isinstance(modes, list):
-            montants = [m.get("rent") for m in modes if isinstance(m, dict) and m.get("rent")]
-            if montants:
-                return " / ".join(f"{m / 100:.0f} €" for m in montants)
-    for cle in ("rent", "minRent", "rentMin"):
-        valeur = item.get(cle)
-        if isinstance(valeur, (int, float)) and valeur > 0:
-            return f"{valeur / 100:.0f} €"
-        if isinstance(valeur, dict):
-            montants = [v for v in (valeur.get("min"), valeur.get("max")) if v]
-            if montants:
-                return "–".join(f"{m / 100:.0f} €" for m in montants)
-    return "prix ?"
+    """Le loyer vit dans occupationModes[].rent = {min, max} en centimes, un par mode
+    d'occupation possible (seul, couple, colocation). Pas de champ prix au niveau racine."""
+    modes = item.get("occupationModes")
+    if not isinstance(modes, list):
+        return "prix ?"
+
+    parts = []
+    for mode in modes:
+        rent = mode.get("rent") if isinstance(mode, dict) else None
+        if not isinstance(rent, dict):
+            continue
+        mini, maxi = rent.get("min"), rent.get("max")
+        if mini is None and maxi is None:
+            continue
+        if mini is None or maxi is None or mini == maxi:
+            montant = f"{(mini or maxi) / 100:.0f} €"
+        else:
+            montant = f"{mini / 100:.0f}–{maxi / 100:.0f} €"
+        label = _LABELS_OCCUPATION.get(mode.get("type"))
+        parts.append(f"{label} : {montant}" if label else montant)
+
+    return " / ".join(parts) if parts else "prix ?"
 
 
 def chercher_annonces(zone: Zone, tool_id: int) -> list[Annonce]:
